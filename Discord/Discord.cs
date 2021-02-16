@@ -10,22 +10,22 @@ using WebSocketSharp;
 
 namespace Discord {
 	public class Discord : IDisposable {
-		REST rest = new REST();
+		REST rest;
 		WebSocket ws;
 
-		public bool authenticated;
-		public string gatewayURL;
-		int channelID;
-		string botToken;
+		public bool authenticated, inChannel;
+		string gatewayURL;
+		string botToken, channelID;
 		public Constants.User user;
 
 		static SchedulerTask heartbeatTask;
 		int sequence;
 
-		public Discord(string token, int channelid) {
+		public Discord(string token, string channelid) {
 			botToken = token;
 			channelID = channelid;
 
+			rest = new REST(token);
 			gatewayURL = GetGateway();
 			ws = new WebSocket(gatewayURL + "?v=8&encoding=json");
 			ws.OnMessage += OnMessage;
@@ -39,16 +39,23 @@ namespace Discord {
 			if (ws != null) ws.Close(CloseStatusCode.Normal);
 		}
 
-		public string GetGateway() {
+		string GetGateway() {
 			Constants.Gateway data = rest.GET<Constants.Gateway>(REST.BaseURL + "/gateway");
 			return data.url;
 		}
 
-		public void Debug(string message) {
+		void OnClose(object sender, CloseEventArgs e) {
+			Debug("Closed connection with code " + e.Code + " (" + e.Reason + ")");
+			Dispose();
+		}
+
+		void Debug(string message) {
 			MCGalaxy.Logger.Log(LogType.Debug, message);
 		}
 
-		public void Beat(SchedulerTask task) {
+
+
+		void Beat(SchedulerTask task) {
 			SendOP(Constants.OPCODE_HEARTBEAT);
 		}
 
@@ -56,7 +63,7 @@ namespace Discord {
 			SendData(new Constants.StatusUpdate(status, activity, type));
 		}
 
-		public void SendOP(int opcode) {
+		void SendOP(int opcode) {
 			object data = null;
 
 			switch (opcode) {
@@ -72,7 +79,7 @@ namespace Discord {
 			SendData(data, true);
 		}
 
-		public void SendData(object data, bool NoAuthCheck = false) {
+		void SendData(object data, bool NoAuthCheck = false) {
 			if (!authenticated && !NoAuthCheck) {
 				// TODO: Queue system?
 				Debug("Data not sent. Not authenticated.");
@@ -83,7 +90,14 @@ namespace Discord {
 			Debug("Sent data " + j);
 		}
 
-		public void Dispach(Constants.WSPayload payload) {
+		public void SendMessage(string ChannelID, string content) {
+			Constants.NewMessage newmsg = new Constants.NewMessage(content);
+			rest.POST(REST.BaseURL + "/channels/" + ChannelID + "/messages", newmsg);
+		}
+
+
+
+		void Dispach(Constants.WSPayload payload) {
 			switch (payload.t) {
 				case "READY":
 					Constants.Ready ready = new Constants.Ready(payload.d);
@@ -93,13 +107,17 @@ namespace Discord {
 					authenticated = true;
 					break;
 
+				case "MESSAGE_CREATE":
+					Debug("Message sent");
+					break;
+
 				default:
 					Debug("Unhandled dispach " + payload.t + ": " + payload.d);
 					break;
 			}
 		}
 
-		public void OnMessage(object sender, MessageEventArgs e) {
+		void OnMessage(object sender, MessageEventArgs e) {
 			Debug("Recv data " + e.Data);
 
 			Constants.WSPayload payload = WS.Deserialize(e.Data);
@@ -128,11 +146,6 @@ namespace Discord {
 					Debug("Unhandled opcode " + payload.op.ToString() + ": " + payload.d);
 					break;
 			}
-		}
-
-		public void OnClose(object sender, CloseEventArgs e) {
-			Debug("Closed connection with code " + e.Code + " (" + e.Reason + ")");
-			Dispose();
 		}
 	}
 }

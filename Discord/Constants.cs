@@ -49,6 +49,16 @@ namespace Discord {
 
 		}
 
+		public class Message {
+			public string id { get; set; }
+			public string channel_id { get; set; }
+			public string guild_id { get; set; }
+			public User author { get; set; }
+			public string content { get; set; }
+			public bool tts { get; set; }
+
+		}
+
 		public class Guild {
 
 		}
@@ -59,6 +69,25 @@ namespace Discord {
 		#region REST
 		public class Gateway {
 			public string url { get; set; }
+		}
+
+		public class NewMessage {
+			public string content { get; set; }
+			// embed
+			public AllowedMentions allowed_mentions { get; set; }
+
+			public class AllowedMentions {
+				public string[] parse { get; set; }
+
+				public AllowedMentions() {
+					parse = new string[0]; // no pings allowed for now
+				}
+			}
+
+			public NewMessage(string msgcontent) {
+				allowed_mentions = new AllowedMentions();
+				content = msgcontent;
+			}
 		}
 		#endregion
 
