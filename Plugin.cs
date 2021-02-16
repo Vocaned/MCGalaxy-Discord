@@ -65,7 +65,7 @@ namespace MCGalaxy {
 		}
 
 		void PlayerChat(Player p, string message) {
-			message = config.MessagePrefix + p.DisplayName + config.MessageSeperator + " " + message;
+			message = config.DiscordPrefix + config.DiscordMessage.Replace("{name}", p.DisplayName).Replace("{msg}", message);
 			SendMessage(message);
 		}
 
@@ -74,7 +74,7 @@ namespace MCGalaxy {
 
 			if (p.hidden) return;
 			if (reason == null) reason = PlayerDB.GetLogoutMessage(p);
-			string message = config.MessagePrefix + config.DisconnectPrefix + " " + p.DisplayName + " " + reason;
+			string message = config.DiscordPrefix + config.DisconnectPrefix + " " + p.DisplayName + " " + reason;
 			SendMessage(message);
 		}
 
@@ -82,12 +82,12 @@ namespace MCGalaxy {
 			SetPresence();
 
 			if (p.hidden) return;
-			string message = config.MessagePrefix + config.ConnectPrefix + " " + p.DisplayName + " " + PlayerDB.GetLoginMessage(p);
+			string message = config.DiscordPrefix + config.ConnectPrefix + " " + p.DisplayName + " " + PlayerDB.GetLoginMessage(p);
 			SendMessage(message);
 		}
 
 		void DiscordMessage(string nick, string message) {
-			message = config.IngamePrefix + " " + nick + ": " + config.IngameColor + message;
+			message = config.IngameMessage.Replace("{name}", nick).Replace("{msg}", message);
 			Chat.Message(ChatScope.Global, message, null, (Player pl, object arg) => !pl.Ignores.IRC);
 		}
 
@@ -134,23 +134,20 @@ namespace MCGalaxy {
 			[ConfigString("activity-name", "Status", "with {p} players", false)]
 			public string ActivityName = "with {p} players";
 
-			[ConfigString("message-prefix", "Formatting", "", true)]
-			public string MessagePrefix = "";
+			[ConfigString("discord-prefix", "Formatting", "", true)]
+			public string DiscordPrefix = "";
 
-			[ConfigString("message-seperator", "Formatting", ":", false)]
-			public string MessageSeperator = ":";
+			[ConfigString("discord-message", "Formatting", "{name}: {msg}", true)]
+			public string DiscordMessage = "{name}: {msg}";
+
+			[ConfigString("ingame-message", "Formatting", "(Discord) &f{name}: {msg}}", true)]
+			public string IngameMessage = Server.Config.IRCColor + "(Discord) &f{name}: {msg}";
 
 			[ConfigString("connect-prefix", "Formatting", "+", false)]
 			public string ConnectPrefix = "+";
 
 			[ConfigString("disconnect-prefix", "Formatting", "-", false)]
 			public string DisconnectPrefix = "-";
-
-			[ConfigString("ingame-prefix", "Formatting", "(Discord)", false)]
-			public string IngamePrefix = Server.Config.IRCColor + "(Discord) &f";
-
-			[ConfigColor("ingame-color", "Formatting", "%f")]
-			public string IngameColor = "%f";
 
 			public enum ClientStatus {
 				online,
@@ -173,6 +170,8 @@ namespace MCGalaxy {
 				if (cfg == null) cfg = ConfigElement.GetAll(typeof(DiscordConfig));
 				PropertiesFile.Read(ConfigFile, LineProcessor);
 				SaveConfig();
+
+				if (config.DiscordPrefix != "") config.DiscordPrefix += " "; // add space after prefix, trim removes it
 			}
 
 			void LineProcessor(string key, string value) {
@@ -204,17 +203,15 @@ namespace MCGalaxy {
 				w.WriteLine("# Possible activity values: playing, listening, watching, competing");
 				w.WriteLine("# {p} is replaced with the player count in activity-name. {s} is 's' when there are multiple players online, and empty when there's one");
 				w.WriteLine("#");
-				w.WriteLine("# CC -> Discord message formatting is:");
-				w.WriteLine("# [message-prefix]<name>[message-seperator] <message>");
-				w.WriteLine("# Message prefix is shown on all messages, including join/leave");
+				w.WriteLine("# discord-prefix adds a prefix to messages from Discord to CC (including connect/disconnect)");
+				w.WriteLine("# discord-message is message sent from CC to Discord");
+				w.WriteLine("# ingame-message is message sent from Discord to CC");
+				w.WriteLine("# {name} is replaced with the player name");
+				w.WriteLine("# {msg} is replaced with the message");
 				w.WriteLine("#");
 				w.WriteLine("# Connect formatting is:");
 				w.WriteLine("# [message-prefix][connect-prefix] <name> <joinmessage>");
 				w.WriteLine("# Disconnect formatting is the same");
-				w.WriteLine("#");
-				w.WriteLine("# Connect formatting is:");
-				w.WriteLine("# ingame-prefix is prefix for messages from Discord -> CC");
-				w.WriteLine("# [ingame-prefix] <nick>: [ingame-color]<msg>");
 				w.WriteLine();
 
 				ConfigElement.Serialise(cfg, w, config);
