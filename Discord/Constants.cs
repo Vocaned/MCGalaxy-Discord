@@ -63,12 +63,38 @@ namespace Discord {
 				public Member member { get; set; }
 				public string content { get; set; }
 				public bool? tts { get; set; }
+				public Embed[] embeds { get; set; }
 			}
 
 			public Data data { get; set; }
 			public Message(JObject d) {
 				data = d.ToObject<Data>();
 			}
+		}
+
+		public class Embed {
+			public DateTime timestamp { get; set; }
+			public string title { get; set; }
+			public string description { get; set; }
+			public string url { get; set; }
+			public int color { get; set; }
+			public EmbedFooter footer { get; set; }
+			public EmbedAuthor author { get; set; }
+			public EmbedField[] fields { get; set; }
+		}
+		public class EmbedFooter {
+			public string text { get; set; }
+			public string icon_url { get; set; }
+		}
+		public class EmbedAuthor {
+			public string name { get; set; }
+			public string url { get; set; }
+			public string icon_url { get; set; }
+		}
+		public class EmbedField {
+			public string name { get; set; }
+			public string value { get; set; }
+			public bool inline { get; set; }
 		}
 
 		//public class Guild {}
@@ -82,7 +108,7 @@ namespace Discord {
 
 		public class NewMessage {
 			public string content { get; set; }
-			// embed
+			public Embed embed { get; set; }
 			public AllowedMentions allowed_mentions { get; set; }
 
 			public class AllowedMentions {
@@ -96,6 +122,11 @@ namespace Discord {
 			public NewMessage(string msgcontent) {
 				allowed_mentions = new AllowedMentions();
 				content = msgcontent;
+			}
+			public NewMessage(Embed embeds, string msgcontent) {
+				allowed_mentions = new AllowedMentions();
+				content = msgcontent;
+				embed = embeds;
 			}
 		}
 		#endregion

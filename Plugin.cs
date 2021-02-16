@@ -87,6 +87,26 @@ namespace MCGalaxy {
 		}
 
 		void DiscordMessage(string nick, string message) {
+			if (message.ToLower() == ".who") {
+
+				Constants.Embed embed = new Constants.Embed();
+				embed.title = "There are " + PlayerInfo.NonHiddenCount().ToString() + " players online";
+
+				List<string> names = new List<string>();
+
+				// TODO: temp
+				Player[] online = PlayerInfo.Online.Items;
+				foreach (Player pl in online) {
+					names.Add(pl.DisplayName);
+				}
+				embed.description = names.Join(", ");
+				embed.timestamp = DateTime.UtcNow;
+				embed.color = 0xaafaaa;
+
+				SendMessage(embed);
+				return;
+			}
+
 			message = config.IngameMessage.Replace("{name}", nick).Replace("{msg}", message);
 			Chat.Message(ChatScope.Global, message, null, (Player pl, object arg) => !pl.Ignores.IRC);
 		}
@@ -102,13 +122,20 @@ namespace MCGalaxy {
 			dc.SendStatusUpdate(config.Status.ToString(), message, (int)config.Activity);
 		}
 
-		public static void SendMessage(string message) {
+		public static void SendMessage(Constants.Embed message) {
 			// Queue a message
+			Server.Background.QueueOnce(SendMessage, message, TimeSpan.Zero);
+		}
+		public static void SendMessage(string message) {
 			Server.Background.QueueOnce(SendMessage, message, TimeSpan.Zero);
 		}
 
 		static void SendMessage(SchedulerTask task) {
-			dc.SendMessage(config.ChannelID, (string)task.State);
+			if (task.State is Constants.Embed) {
+				dc.SendMessage(config.ChannelID, (Constants.Embed)task.State);
+			} else if (task.State is string) {
+				dc.SendMessage(config.ChannelID, (string)task.State);
+			}
 		}
 
 		public static void ReloadConfig() {
@@ -231,7 +258,6 @@ namespace MCGalaxy {
 			switch(args[0]) {
 				case "reload": ReloadConfig(p); return;
 				case "restart": RestartBot(p); return;
-				case "message": SendMessage(args); return;
 			}
 		}
 
@@ -244,10 +270,6 @@ namespace MCGalaxy {
 			PluginDiscord.dc.Dispose();
 			PluginDiscord.dc = new Discord.Discord(PluginDiscord.config.Token, PluginDiscord.config.ChannelID);
 			p.Message("Discord bot restarted.");
-		}
-
-		void SendMessage(string[] args) {
-			PluginDiscord.SendMessage(args[1]);
 		}
 
 		public override void Help(Player p) {

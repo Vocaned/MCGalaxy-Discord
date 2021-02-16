@@ -94,6 +94,11 @@ namespace Discord {
 			rest.POST(REST.BaseURL + "/channels/" + ChannelID + "/messages", newmsg);
 		}
 
+		public void SendMessage(string ChannelID, Constants.Embed embed) {
+			Constants.NewMessage newmsg = new Constants.NewMessage(embed, "");
+			rest.POST(REST.BaseURL + "/channels/" + ChannelID + "/messages", newmsg);
+		}
+
 		void Dispach(Constants.WSPayload payload) {
 			switch (payload.t) {
 				case "READY":
@@ -111,6 +116,9 @@ namespace Discord {
 					if (msg.data.member.nick != null) nick = msg.data.member.nick;
 
 					OnMessageReceivedEvent.Call(nick, msg.data.content);
+					break;
+
+				case "MESSAGE_UPDATE":
 					break;
 
 				case "GUILD_CREATE":
