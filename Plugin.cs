@@ -1,8 +1,10 @@
 ﻿using System;
 using System.IO;
+using System.Collections.Generic;
 using MCGalaxy.Config;
 using MCGalaxy.Events;
 using MCGalaxy.DB;
+using MCGalaxy.Tasks;
 using MCGalaxy.Events.PlayerEvents;
 using Discord;
 
@@ -13,7 +15,7 @@ namespace MCGalaxy {
 		public override string creator { get { return ""; } }
 
 		public const string ConfigFile = "properties/discord.properties";
-		static DiscordConfig config = new DiscordConfig();
+		public static DiscordConfig config = new DiscordConfig();
 
 		public static Discord.Discord dc;
 		bool registered;
@@ -32,6 +34,8 @@ namespace MCGalaxy {
 			OnPlayerChatEvent.Register(PlayerChat, Priority.Low);
 			OnPlayerCommandEvent.Register(PlayerCommand, Priority.Low);
 
+			OnMessageReceivedEvent.Register(DiscordMessage, Priority.Low);
+
 			Command.Register(new CmdDiscordBot());
 			registered = true;
 		}
@@ -44,8 +48,12 @@ namespace MCGalaxy {
 			OnPlayerChatEvent.Unregister(PlayerChat);
 			OnPlayerCommandEvent.Unregister(PlayerCommand);
 
+			OnMessageReceivedEvent.Unregister(DiscordMessage);
+
 			Command.Unregister(Command.Find("DiscordBot"));
 		}
+
+
 
 		void PlayerCommand(Player p, string cmd, string args, CommandData data) {
 			if (cmd != "hide") return;
@@ -57,8 +65,6 @@ namespace MCGalaxy {
 		}
 
 		void PlayerChat(Player p, string message) {
-			SetPresence();
-
 			message = config.MessagePrefix + p.DisplayName + config.MessageSeperator + " " + message;
 			SendMessage(message);
 		}
@@ -80,6 +86,12 @@ namespace MCGalaxy {
 			SendMessage(message);
 		}
 
+		void DiscordMessage(string nick, string message) {
+			message = config.IngamePrefix + " " + nick + ": " + config.IngameColor + message;
+			Chat.Message(ChatScope.Global, message, null, (Player pl, object arg) => !pl.Ignores.IRC);
+		}
+
+
 		static void SetPresence(int offset = 0) {
 			int count = PlayerInfo.NonHiddenCount();
 			if (offset != 0) count += offset;
@@ -87,19 +99,26 @@ namespace MCGalaxy {
 			string s = count == 1 ? "" : "s";
 			string message = config.ActivityName.Replace("{p}", count.ToString()).Replace("{s}", s);
 
-			dc.SendStatusUpdate(config.Status.ToString(), message, (int)config.Activity); // 3 = watching
+			dc.SendStatusUpdate(config.Status.ToString(), message, (int)config.Activity);
 		}
 
 		public static void SendMessage(string message) {
-			dc.SendMessage(config.ChannelID, message);
+			// Queue a message
+			Server.Background.QueueOnce(SendMessage, message, TimeSpan.Zero);
 		}
 
+		static void SendMessage(SchedulerTask task) {
+			dc.SendMessage(config.ChannelID, (string)task.State);
+		}
 
 		public static void ReloadConfig() {
 			config.LoadConfig();
 		}
 
-		class DiscordConfig {
+
+
+
+		public class DiscordConfig {
 			[ConfigString("token", "Account", "", true)]
 			public string Token = "";
 
@@ -115,17 +134,23 @@ namespace MCGalaxy {
 			[ConfigString("activity-name", "Status", "with {p} players", false)]
 			public string ActivityName = "with {p} players";
 
-			[ConfigString("message-prefix", "Formatting", "", false)]
+			[ConfigString("message-prefix", "Formatting", "", true)]
 			public string MessagePrefix = "";
 
 			[ConfigString("message-seperator", "Formatting", ":", false)]
-			public string MessageSeperator = ": ";
+			public string MessageSeperator = ":";
 
 			[ConfigString("connect-prefix", "Formatting", "+", false)]
 			public string ConnectPrefix = "+";
 
 			[ConfigString("disconnect-prefix", "Formatting", "-", false)]
 			public string DisconnectPrefix = "-";
+
+			[ConfigString("ingame-prefix", "Formatting", "(Discord)", false)]
+			public string IngamePrefix = Server.Config.IRCColor + "(Discord) &f";
+
+			[ConfigColor("ingame-color", "Formatting", "%f")]
+			public string IngameColor = "%f";
 
 			public enum ClientStatus {
 				online,
@@ -179,13 +204,17 @@ namespace MCGalaxy {
 				w.WriteLine("# Possible activity values: playing, listening, watching, competing");
 				w.WriteLine("# {p} is replaced with the player count in activity-name. {s} is 's' when there are multiple players online, and empty when there's one");
 				w.WriteLine("#");
-				w.WriteLine("# Message formatting is:");
+				w.WriteLine("# CC -> Discord message formatting is:");
 				w.WriteLine("# [message-prefix]<name>[message-seperator] <message>");
 				w.WriteLine("# Message prefix is shown on all messages, including join/leave");
 				w.WriteLine("#");
 				w.WriteLine("# Connect formatting is:");
 				w.WriteLine("# [message-prefix][connect-prefix] <name> <joinmessage>");
 				w.WriteLine("# Disconnect formatting is the same");
+				w.WriteLine("#");
+				w.WriteLine("# Connect formatting is:");
+				w.WriteLine("# ingame-prefix is prefix for messages from Discord -> CC");
+				w.WriteLine("# [ingame-prefix] <nick>: [ingame-color]<msg>");
 				w.WriteLine();
 
 				ConfigElement.Serialise(cfg, w, config);
@@ -196,19 +225,28 @@ namespace MCGalaxy {
 	public sealed class CmdDiscordBot : Command2 {
 		public override string name { get { return "DiscordBot"; } }
 		public override string type { get { return CommandTypes.Other; } }
+		public override LevelPermission defaultRank { get { return LevelPermission.Admin; } }
 
 		public override void Use(Player p, string message, CommandData data) {
+			if (message == "") { Help(p); return; }
 			string[] args = message.SplitSpaces(2);
-			if (args.Length < 1) { Help(p); return; }
 
 			switch(args[0]) {
-				case "reload": ReloadConfig(); return;
+				case "reload": ReloadConfig(p); return;
+				case "restart": RestartBot(p); return;
 				case "message": SendMessage(args); return;
 			}
 		}
 
-		void ReloadConfig() {
+		void ReloadConfig(Player p) {
 			PluginDiscord.ReloadConfig();
+			p.Message("Discord config reloaded.");
+		}
+
+		void RestartBot(Player p) {
+			PluginDiscord.dc.Dispose();
+			PluginDiscord.dc = new Discord.Discord(PluginDiscord.config.Token, PluginDiscord.config.ChannelID);
+			p.Message("Discord bot restarted.");
 		}
 
 		void SendMessage(string[] args) {
@@ -217,6 +255,7 @@ namespace MCGalaxy {
 
 		public override void Help(Player p) {
 			p.Message("%T/DiscordBot reload - %HReload config files");
+			p.Message("%T/DiscordBot restart - %HRestart the bot");
 			p.Message("%HToken or Channel ID changes require a restart after reloading the config");
 		}
 	}

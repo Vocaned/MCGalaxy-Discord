@@ -5,3 +5,4 @@
 * Write README
 * Provide binaries
 * Link dependancies with ILMerge (?)
+* Handle spam ratelimits

@@ -45,24 +45,33 @@ namespace Discord {
 			public string avatar { get; set; }
 		}
 
-		public class Channel {
+		public class Member {
+			public string nick { get; set; }
+		}
 
+		public class Channel {
+			public string id { get; set; }
+			public string name { get; set; }
 		}
 
 		public class Message {
-			public string id { get; set; }
-			public string channel_id { get; set; }
-			public string guild_id { get; set; }
-			public User author { get; set; }
-			public string content { get; set; }
-			public bool tts { get; set; }
+			public class Data {
+				public string id { get; set; }
+				public string channel_id { get; set; }
+				public string guild_id { get; set; }
+				public User author { get; set; }
+				public Member member { get; set; }
+				public string content { get; set; }
+				public bool? tts { get; set; }
+			}
 
+			public Data data { get; set; }
+			public Message(JObject d) {
+				data = d.ToObject<Data>();
+			}
 		}
 
-		public class Guild {
-
-		}
-
+		//public class Guild {}
 		//public class Application {}
 		#endregion
 
@@ -112,12 +121,24 @@ namespace Discord {
 				public int v { get; set; }
 				public User user { get; set; }
 				public Channel[] private_channels { get; set; }
-				public Guild[] guilds { get; set; }
+				//public Guild[] guilds { get; set; }
 				public string session_id { get; set; }
 				// public Application application { get; set; }
 			}
 			public Data data { get; set; }
 			public Ready(JObject d) {
+				data = d.ToObject<Data>();
+			}
+		}
+
+		public class GuildCreate : WSPayload {
+			public class Data {
+				public string id { get; set; }
+				public string name { get; set; }
+				public Channel[] channels { get; set; }
+			}
+			public Data data { get; set; }
+			public GuildCreate(JObject d) {
 				data = d.ToObject<Data>();
 			}
 		}
@@ -170,7 +191,7 @@ namespace Discord {
 
 				Data opts = new Data();
 				opts.token = token;
-				opts.intents = INTENT_GUILD_MESSAGES;
+				opts.intents = INTENT_GUILDS | INTENT_GUILD_MESSAGES;
 				opts.guild_subscriptions = false;
 
 				opts.properties.os = opts.properties.browser = opts.properties.device = "MCGalaxy-Discord";

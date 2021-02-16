@@ -3,6 +3,7 @@ using System.IO;
 using System.Net;
 using System.Collections.Generic;
 using MCGalaxy;
+using MCGalaxy.Events;
 using MCGalaxy.Tasks;
 using Newtonsoft.Json;
 using System.Threading;
@@ -13,12 +14,11 @@ namespace Discord {
 		REST rest;
 		WebSocket ws;
 
-		public bool authenticated, inChannel;
-		string gatewayURL;
-		string botToken, channelID;
 		public Constants.User user;
+		public bool authenticated;
+		string gatewayURL, botToken, channelID;	
 
-		static SchedulerTask heartbeatTask;
+		SchedulerTask heartbeatTask;
 		int sequence;
 
 		public Discord(string token, string channelid) {
@@ -35,8 +35,8 @@ namespace Discord {
 
 		public void Dispose() {
 			rest.Dispose();
-			if (heartbeatTask != null) heartbeatTask.Repeating = false;
-			if (ws != null) ws.Close(CloseStatusCode.Normal);
+			Server.Background.Cancel(heartbeatTask);
+			if (ws != null && ws.IsAlive) ws.Close(CloseStatusCode.Normal);
 		}
 
 		string GetGateway() {
@@ -87,7 +87,6 @@ namespace Discord {
 			}
 			string j = JsonConvert.SerializeObject(data);
 			ws.Send(j);
-			Debug("Sent data " + j);
 		}
 
 		public void SendMessage(string ChannelID, string content) {
@@ -95,20 +94,33 @@ namespace Discord {
 			rest.POST(REST.BaseURL + "/channels/" + ChannelID + "/messages", newmsg);
 		}
 
-
-
 		void Dispach(Constants.WSPayload payload) {
 			switch (payload.t) {
 				case "READY":
 					Constants.Ready ready = new Constants.Ready(payload.d);
 					user = ready.data.user;
-
+				
 					MCGalaxy.Logger.Log(LogType.ConsoleMessage, "Logged in as " + user.username + "#" + user.discriminator);
-					authenticated = true;
 					break;
 
 				case "MESSAGE_CREATE":
-					Debug("Message sent");
+					Constants.Message msg = new Constants.Message(payload.d);
+					if (msg.data.channel_id != channelID || msg.data.author.id == user.id) break;
+
+					string nick = msg.data.author.username;
+					if (msg.data.member.nick != null) nick = msg.data.member.nick;
+
+					OnMessageReceivedEvent.Call(nick, msg.data.content);
+					break;
+
+				case "GUILD_CREATE":
+					Constants.GuildCreate data = new Constants.GuildCreate(payload.d);
+					foreach (Constants.Channel channel in data.data.channels) {
+						if (channel.id == channelID) {
+							Debug("Successfully authenticated!");
+							authenticated = true;
+						}
+					}
 					break;
 
 				default:
@@ -118,8 +130,6 @@ namespace Discord {
 		}
 
 		void OnMessage(object sender, MessageEventArgs e) {
-			Debug("Recv data " + e.Data);
-
 			Constants.WSPayload payload = WS.Deserialize(e.Data);
 
 			if (payload.s != null) sequence = payload.s.Value;
@@ -146,6 +156,14 @@ namespace Discord {
 					Debug("Unhandled opcode " + payload.op.ToString() + ": " + payload.d);
 					break;
 			}
+		}
+	}
+
+	public delegate void OnMessageReceived(string nick, string message);
+	public sealed class OnMessageReceivedEvent : IEvent<OnMessageReceived> {
+		public static void Call(string nick, string message) {
+			if (handlers.Count == 0) return;
+			CallCommon(pl => pl(nick, message));
 		}
 	}
 }
