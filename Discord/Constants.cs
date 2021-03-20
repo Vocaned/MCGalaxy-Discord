@@ -73,7 +73,7 @@ namespace Discord {
 		}
 
 		public class Embed {
-			public DateTime timestamp { get; set; }
+			//public DateTime timestamp { get; set; }
 			public string title { get; set; }
 			public string description { get; set; }
 			public string url { get; set; }
@@ -159,6 +159,25 @@ namespace Discord {
 			public Data data { get; set; }
 			public Ready(JObject d) {
 				data = d.ToObject<Data>();
+			}
+		}
+
+		public class Resume : WSPayload {
+			public class Data {
+				public string token { get; set; }
+				public string session_id { get; set; }
+				public int seq { get; set; }
+			}
+			public Data data { get; set; }
+			public Resume(string token, string session_id, int seq) {
+				op = OPCODE_RESUME;
+				Data opts = new Data();
+
+				opts.token = token;
+				opts.session_id = session_id;
+				opts.seq = seq;
+
+				d = JObject.FromObject(opts);
 			}
 		}
 

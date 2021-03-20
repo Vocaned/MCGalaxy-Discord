@@ -35,8 +35,19 @@ namespace Discord {
 			return JsonConvert.DeserializeObject<T>(wc.DownloadString(url));
 		}
 
-		public void POST(string url, object data) {
-			wc.UploadString(url, JsonConvert.SerializeObject(data));
+		public int POST(string url, object data) {
+			try {
+				wc.UploadString(url, JsonConvert.SerializeObject(data));
+			} catch (WebException ex) {
+				if (ex.Status == WebExceptionStatus.ProtocolError) {
+					HttpWebResponse res = (HttpWebResponse)ex.Response;
+					if (res == null) return 0;
+
+					return (int)res.StatusCode;
+				}
+				return 0;
+			}
+			return 200;
 		}
 
 		public T POST<T>(string url, object data) {

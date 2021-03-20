@@ -10,7 +10,7 @@ using Discord;
 
 namespace MCGalaxy {
 	public class PluginDiscord : Plugin {
-		public override string name { get { return "Discord"; } }
+		public override string name { get { return "DiscordPlugin"; } }
 		public override string MCGalaxy_Version { get { return "1.9.1.4"; } }
 		public override string creator { get { return ""; } }
 
@@ -33,6 +33,7 @@ namespace MCGalaxy {
 			OnPlayerDisconnectEvent.Register(PlayerDisconnect, Priority.Low);
 			OnPlayerChatEvent.Register(PlayerChat, Priority.Low);
 			OnPlayerCommandEvent.Register(PlayerCommand, Priority.Low);
+			// TODO: mod action event
 
 			OnMessageReceivedEvent.Register(DiscordMessage, Priority.Low);
 
@@ -62,11 +63,14 @@ namespace MCGalaxy {
 			// Has to be done because this event is called before /hide is called
 			if (p.hidden) SetPresence(1);
 			else SetPresence(-1);
+
+			//TODO: Show fake login msg
 		}
 
 		void PlayerChat(Player p, string message) {
+			if (p.cancelchat) return;
 			message = config.DiscordPrefix + config.DiscordMessage.Replace("{name}", p.DisplayName).Replace("{msg}", message);
-			SendMessage(message);
+			SendMessage(Colors.Strip(message));
 		}
 
 		void PlayerDisconnect(Player p, string reason) {
@@ -75,7 +79,7 @@ namespace MCGalaxy {
 			if (p.hidden) return;
 			if (reason == null) reason = PlayerDB.GetLogoutMessage(p);
 			string message = config.DiscordPrefix + config.DisconnectPrefix + " " + p.DisplayName + " " + reason;
-			SendMessage(message);
+			SendMessage(Colors.Strip(message));
 		}
 
 		void PlayerConnect(Player p) {
@@ -83,25 +87,42 @@ namespace MCGalaxy {
 
 			if (p.hidden) return;
 			string message = config.DiscordPrefix + config.ConnectPrefix + " " + p.DisplayName + " " + PlayerDB.GetLoginMessage(p);
-			SendMessage(message);
+			SendMessage(Colors.Strip(message));
 		}
 
 		void DiscordMessage(string nick, string message) {
-			if (message.ToLower() == ".who") {
-
+			if (message.CaselessEq(".who") || message.CaselessEq(".players") || message.CaselessEq("!players")) {
 				Constants.Embed embed = new Constants.Embed();
-				embed.title = "There are " + PlayerInfo.NonHiddenCount().ToString() + " players online";
+				embed.color = config.EmbedColor;
+				embed.title = Server.Config.Name;
 
-				List<string> names = new List<string>();
+				Dictionary<string, List<string>> ranks = new Dictionary<string, List<string>>();
 
-				// TODO: temp
-				Player[] online = PlayerInfo.Online.Items;
-				foreach (Player pl in online) {
-					names.Add(pl.DisplayName);
+				int totalPlayers = 0;
+				List<Who.GroupPlayers> allPlayers = new List<Who.GroupPlayers>();
+
+				if (totalPlayers == 1) embed.description = "**There is 1 player online**\n\n";
+				else embed.description = "**There are " + PlayerInfo.Online.Count + " players online**\n\n";
+
+				if (config.zsmode && Games.ZSGame.Instance.Running) {
+					foreach (Group grp in Group.GroupList) {
+						allPlayers.Add(Who.Make(grp, false, ref totalPlayers));
+					}
+
+					for (int i = allPlayers.Count - 1; i >= 0; i--) {
+						embed.description += Who.Output(allPlayers[i]);
+					}
+
+					embed.description += "\n" + "Map: `" + Games.ZSGame.Instance.Map.name + "`";
+				} else {
+					foreach (Group grp in Group.GroupList) {
+						allPlayers.Add(Who.Make(grp, true, ref totalPlayers));
+					}
+
+					for (int i = allPlayers.Count - 1; i >= 0; i--) {
+						embed.description += Who.Output(allPlayers[i]);
+					}
 				}
-				embed.description = names.Join(", ");
-				embed.timestamp = DateTime.UtcNow;
-				embed.color = 0xaafaaa;
 
 				SendMessage(embed);
 				return;
@@ -113,6 +134,7 @@ namespace MCGalaxy {
 
 
 		static void SetPresence(int offset = 0) {
+			if (!config.UseStatus) return;
 			int count = PlayerInfo.NonHiddenCount();
 			if (offset != 0) count += offset;
 
@@ -123,7 +145,7 @@ namespace MCGalaxy {
 		}
 
 		public static void SendMessage(Constants.Embed message) {
-			// Queue a message
+			// Queue a message so the message doesn't have to wait until discord receives it to display in chat
 			Server.Background.QueueOnce(SendMessage, message, TimeSpan.Zero);
 		}
 		public static void SendMessage(string message) {
@@ -161,6 +183,9 @@ namespace MCGalaxy {
 			[ConfigString("activity-name", "Status", "with {p} players", false)]
 			public string ActivityName = "with {p} players";
 
+			[ConfigBool("use-status", "Status", true)]
+			public bool UseStatus = true;
+
 			[ConfigString("discord-prefix", "Formatting", "", true)]
 			public string DiscordPrefix = "";
 
@@ -175,6 +200,12 @@ namespace MCGalaxy {
 
 			[ConfigString("disconnect-prefix", "Formatting", "-", false)]
 			public string DisconnectPrefix = "-";
+
+			[ConfigInt("embed-color", "Formatting", 0xaafaaa)]
+			public int EmbedColor = 0xaafaaa;
+
+			[ConfigBool("zsmode", "Formatting", false)]
+			public bool zsmode = false;
 
 			public enum ClientStatus {
 				online,
@@ -239,6 +270,8 @@ namespace MCGalaxy {
 				w.WriteLine("# Connect formatting is:");
 				w.WriteLine("# [message-prefix][connect-prefix] <name> <joinmessage>");
 				w.WriteLine("# Disconnect formatting is the same");
+				w.WriteLine("#");
+				w.WriteLine("# embed-color is the color used in embeds, as an integer");
 				w.WriteLine();
 
 				ConfigElement.Serialise(cfg, w, config);

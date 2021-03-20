@@ -1,8 +1,6 @@
 # TODO:
 
-* Resume dropped gateway connections properly
-* Handle ACKs
+* Resume dropped gateway connections properly (done-ish?)
 * Write README
 * Provide binaries
-* Link dependancies with ILMerge (?)
-* Handle spam ratelimits
+* Handle spam ratelimits (better?)
