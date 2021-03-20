@@ -33,7 +33,7 @@ namespace MCGalaxy {
 			OnPlayerDisconnectEvent.Register(PlayerDisconnect, Priority.Low);
 			OnPlayerChatEvent.Register(PlayerChat, Priority.Low);
 			OnPlayerCommandEvent.Register(PlayerCommand, Priority.Low);
-			// TODO: mod action event
+			OnModActionEvent.Register(ModAction, Priority.Low);
 
 			OnMessageReceivedEvent.Register(DiscordMessage, Priority.Low);
 
@@ -61,10 +61,23 @@ namespace MCGalaxy {
 
 			// Offset the player count by one if player is going to hide
 			// Has to be done because this event is called before /hide is called
-			if (p.hidden) SetPresence(1);
-			else SetPresence(-1);
+			if (p.hidden) {
+				SetPresence(1);
+				string message = config.DiscordPrefix + config.ConnectPrefix + " " + p.DisplayName + " " + PlayerDB.GetLoginMessage(p);
+				SendMessage(Colors.Strip(message));
+			} else {
+				SetPresence(-1);
+				string message = config.DiscordPrefix + config.ConnectPrefix + " " + p.DisplayName + " " + PlayerDB.GetLogoutMessage(p);
+				SendMessage(Colors.Strip(message));
+			}
+		}
 
-			//TODO: Show fake login msg
+
+		void ModAction(ModAction e) {
+			if (!e.Announce) return;
+
+			string message = config.DisconnectPrefix + e.FormatMessage(e.Target, GetActionType(e.Type));
+			SendMessage(Colors.Strip(message));
 		}
 
 		void PlayerChat(Player p, string message) {
@@ -164,8 +177,36 @@ namespace MCGalaxy {
 			config.LoadConfig();
 		}
 
-
-
+		string GetActionType(ModActionType type) {
+			switch (type) {
+				case ModActionType.Ban:
+					return "banned";
+				case ModActionType.BanIP:
+					return "IP Banned";
+				case ModActionType.UnbanIP:
+					return "IP Unbanned";
+				case ModActionType.Muted:
+					return "Muted";
+				case ModActionType.Unmuted:
+					return "Unmuted";
+				case ModActionType.Frozen:
+					return "Frozen";
+				case ModActionType.Unfrozen:
+					return "Unfrozen";
+				case ModActionType.Jailed:
+					return "Jailed";
+				case ModActionType.Unjailed:
+					return "Unjailed";
+				case ModActionType.Warned:
+					return "Warned";
+				case ModActionType.Rank:
+					return "Ranked";
+				case ModActionType.Kicked:
+					return "Kicked";
+				default:
+					return "Punished";
+			}
+		}
 
 		public class DiscordConfig {
 			[ConfigString("token", "Account", "", true)]

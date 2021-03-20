@@ -20,6 +20,7 @@ namespace Discord {
 
 		SchedulerTask heartbeatTask;
 		int sequence;
+		bool resuming;
 
 		List<object> dataQueue = new List<object>();
 		List<string> msgQueue = new List<string>();
@@ -51,10 +52,10 @@ namespace Discord {
 			rest.Dispose();
 			Server.Background.Cancel(heartbeatTask);
 			if (ws != null && ws.IsAlive) ws.Close(statusCode);
+			authenticated = false;
 
+			resuming = true;
 			Init();
-
-			SendOP(Constants.OPCODE_RESUME);
 		}
 
 		string GetGateway() {
@@ -65,7 +66,10 @@ namespace Discord {
 		void OnClose(object sender, CloseEventArgs e) {
 			Debug("Closed connection with code " + e.Code + " (" + e.Reason + ")");
 			if (e.Code.IsCloseStatusCode() && e.Code == (uint)CloseStatusCode.Normal) Dispose();
-			else Reset();
+			else {
+				Reset();
+				SendMessage(channelID, "<@177424155371634688> reset after closing with " + e.Code.ToString());
+			}
 		}
 
 		void Debug(string message) {
@@ -126,7 +130,7 @@ namespace Discord {
 
 		public void SendMessage(string ChannelID, string content) {
 			if (!authenticated) {
-				msgQueue.Add(content);
+				msgQueue.Add(content); return;
 			}
 
 			// Deal with data in queue first so things don't get sent out of order
@@ -148,7 +152,7 @@ namespace Discord {
 
 		public void SendMessage(string ChannelID, Constants.Embed embed) {
 			if (!authenticated) {
-				embedQueue.Add(embed);
+				embedQueue.Add(embed); return;
 			}
 
 			// Deal with data in queue first so things don't get sent out of order
@@ -223,7 +227,9 @@ namespace Discord {
 					if (heartbeatTask == null) heartbeatTask = Server.Background.QueueRepeat(Beat, null, delay);
 					else heartbeatTask.Delay = delay;
 
-					SendOP(Constants.OPCODE_IDENTIFY); // Init identify
+					if (resuming) SendOP(Constants.OPCODE_RESUME);
+					else SendOP(Constants.OPCODE_IDENTIFY);
+					resuming = false;
 					break;
 
 				case Constants.OPCODE_ACK:
