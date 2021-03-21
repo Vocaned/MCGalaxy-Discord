@@ -67,7 +67,7 @@ namespace MCGalaxy {
 				SendMessage(Colors.Strip(message));
 			} else {
 				SetPresence(-1);
-				string message = config.DiscordPrefix + config.ConnectPrefix + " " + p.DisplayName + " " + PlayerDB.GetLogoutMessage(p);
+				string message = config.DiscordPrefix + config.DisconnectPrefix + " " + p.DisplayName + " " + PlayerDB.GetLogoutMessage(p);
 				SendMessage(Colors.Strip(message));
 			}
 		}
@@ -75,13 +75,12 @@ namespace MCGalaxy {
 
 		void ModAction(ModAction e) {
 			if (!e.Announce) return;
-
 			string message = config.DisconnectPrefix + e.FormatMessage(e.Target, GetActionType(e.Type));
 			SendMessage(Colors.Strip(message));
 		}
 
 		void PlayerChat(Player p, string message) {
-			if (p.cancelchat) return;
+			if (p.cancelchat || !p.level.Config.ServerWideChat) return;
 			message = config.DiscordPrefix + config.DiscordMessage.Replace("{name}", p.DisplayName).Replace("{msg}", message);
 			SendMessage(Colors.Strip(message));
 		}

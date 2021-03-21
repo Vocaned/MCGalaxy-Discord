@@ -16,11 +16,11 @@ namespace Discord {
 
 		public Constants.User user;
 		public bool authenticated, beat;
-		string gatewayURL, botToken, channelID, session_id;	
+		string gatewayURL, botToken, channelID, session_id;
 
 		SchedulerTask heartbeatTask;
 		int sequence;
-		bool resuming;
+		bool resetting;
 
 		List<object> dataQueue = new List<object>();
 		List<string> msgQueue = new List<string>();
@@ -43,18 +43,20 @@ namespace Discord {
 		}
 
 		public void Dispose() {
+			resetting = true;
 			rest.Dispose();
 			Server.Background.Cancel(heartbeatTask);
 			if (ws != null && ws.IsAlive) ws.Close(CloseStatusCode.Normal);
 		}
 
 		public void Reset(CloseStatusCode statusCode = CloseStatusCode.Normal) {
+			resetting = true;
+			authenticated = false;
+
 			rest.Dispose();
 			Server.Background.Cancel(heartbeatTask);
 			if (ws != null && ws.IsAlive) ws.Close(statusCode);
-			authenticated = false;
 
-			resuming = true;
 			Init();
 		}
 
@@ -65,11 +67,8 @@ namespace Discord {
 
 		void OnClose(object sender, CloseEventArgs e) {
 			Debug("Closed connection with code " + e.Code + " (" + e.Reason + ")");
-			if (e.Code.IsCloseStatusCode() && e.Code == (uint)CloseStatusCode.Normal) Dispose();
-			else {
-				Reset();
-				SendMessage(channelID, "<@177424155371634688> reset after closing with " + e.Code.ToString());
-			}
+			if (!resetting) Reset();
+			SendMessage(channelID, "<@177424155371634688> closed with " + e.Code.ToString());
 		}
 
 		void Debug(string message) {
@@ -178,7 +177,7 @@ namespace Discord {
 					Constants.Ready ready = new Constants.Ready(payload.d);
 					user = ready.data.user;
 					session_id = ready.data.session_id;
-				
+
 					MCGalaxy.Logger.Log(LogType.ConsoleMessage, "Logged in as " + user.username + "#" + user.discriminator);
 					authenticated = true;
 					break;
@@ -193,6 +192,7 @@ namespace Discord {
 					OnMessageReceivedEvent.Call(nick, msg.data.content);
 					break;
 
+			
 				case "MESSAGE_UPDATE":
 				case "CHANNEL_UPDATE":
 					break;
@@ -204,6 +204,10 @@ namespace Discord {
 							Debug("Successfully authenticated!");
 						}
 					}
+					break;
+
+				case "RESUMED":
+					authenticated = true;
 					break;
 
 				default:
@@ -227,9 +231,9 @@ namespace Discord {
 					if (heartbeatTask == null) heartbeatTask = Server.Background.QueueRepeat(Beat, null, delay);
 					else heartbeatTask.Delay = delay;
 
-					if (resuming) SendOP(Constants.OPCODE_RESUME);
+					if (resetting) SendOP(Constants.OPCODE_RESUME);
 					else SendOP(Constants.OPCODE_IDENTIFY);
-					resuming = false;
+					resetting = false;
 					break;
 
 				case Constants.OPCODE_ACK:
@@ -242,6 +246,7 @@ namespace Discord {
 					break;
 
 				case Constants.OPCODE_RECONNECT:
+					Debug("Discord asked to reconnect");
 					Reset();
 					break;
 

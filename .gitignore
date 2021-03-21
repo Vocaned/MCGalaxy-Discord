@@ -11,6 +11,7 @@ debug.sh
 *.suo
 *.user
 *.sln.docstates
+*.code-workspace
 
 # Build results
 [Dd]ebug/
