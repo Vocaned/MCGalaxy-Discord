@@ -46,7 +46,8 @@ namespace Discord {
 			resetting = true;
 			rest.Dispose();
 			Server.Background.Cancel(heartbeatTask);
-			if (ws != null && ws.IsAlive) ws.Close(CloseStatusCode.Normal);
+			if (ws != null) ws.Close(CloseStatusCode.Normal);
+			((IDisposable)ws).Dispose();
 		}
 
 		public void Reset(CloseStatusCode statusCode = CloseStatusCode.Normal) {
@@ -55,8 +56,8 @@ namespace Discord {
 
 			rest.Dispose();
 			Server.Background.Cancel(heartbeatTask);
-			if (ws != null && ws.IsAlive) ws.Close(statusCode);
-
+			if (ws != null) ws.Close(statusCode);
+			((IDisposable)ws).Dispose();
 			Init();
 		}
 
